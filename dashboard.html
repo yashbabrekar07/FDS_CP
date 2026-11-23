@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Student Marks & Result Manager</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: #f8fafc;
+      color: #1e293b;
+    }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    .clean-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
+    }
+    .clean-card:hover {
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+    }
+    @media print {
+      body * { visibility: hidden; }
+      #printableScorecard, #printableScorecard * { visibility: visible; }
+      #printableScorecard { position: absolute; left: 0; top: 0; width: 100%; border: none !important; box-shadow: none !important; }
+    }
+  </style>
+</head>
+<body class="min-h-screen p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto">
+
+  <!-- TOP HEADER -->
+  <header class="mb-6">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-200">
+      <div>
+        <div class="flex items-center gap-2 mb-1">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
+          <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Results Ready</span>
+        </div>
+        <h1 class="text-2xl font-bold tracking-tight text-slate-900">Student Marks & Result Manager</h1>
+        <p class="text-sm text-slate-500 mt-0.5">Track marks, find top scorers, check backlogs, and generate scorecards.</p>
+      </div>
+
+      <div class="flex items-center gap-2.5">
+        <button onclick="openAddModal()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs rounded-lg transition shadow-sm flex items-center gap-1.5">
+          <span>+ Add Student</span>
+        </button>
+        <button id="undoBtn" onclick="undoLastChange()" class="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 text-xs font-medium rounded-lg transition flex items-center gap-1.5 shadow-sm">
+          <span>↺ Undo</span>
+          <span id="undoCountBadge" class="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[10px] font-mono">0</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- STATS SUMMARY CARDS -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3.5 mt-5">
+      <div class="clean-card rounded-xl p-4">
+        <span class="text-xs font-medium text-slate-500">Total Students</span>
+        <div class="flex items-baseline justify-between mt-1">
+          <span id="statTotal" class="text-2xl font-bold text-slate-900">10</span>
+          <span class="text-[11px] text-slate-400">Class count</span>
+        </div>
+      </div>
+      <div class="clean-card rounded-xl p-4">
+        <span class="text-xs font-medium text-slate-500">Class Average</span>
+        <div class="flex items-baseline justify-between mt-1">
+          <span id="statAvg" class="text-2xl font-bold text-indigo-600">0.0%</span>
+          <span class="text-[11px] text-slate-400">Passing: 40%</span>
+        </div>
+      </div>
+      <div class="clean-card rounded-xl p-4">
+        <span class="text-xs font-medium text-slate-500">Highest Score</span>
+        <div class="flex items-baseline justify-between mt-1">
+          <span id="statTopPercent" class="text-2xl font-bold text-emerald-600">0.0%</span>
+          <span id="statTopName" class="text-[11px] font-medium text-slate-600 truncate max-w-[100px]">-</span>
+        </div>
+      </div>
+      <div class="clean-card rounded-xl p-4">
+        <span class="text-xs font-medium text-slate-500">Backlogs / Re-exam</span>
+        <div class="flex items-baseline justify-between mt-1">
+          <span id="statBacklogCount" class="text-2xl font-bold text-rose-600">0</span>
+          <span class="text-[11px] text-rose-500 font-medium">Need re-test</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- NAVIGATION TABS -->
+  <div class="flex items-center gap-1.5 mb-6 border-b border-slate-200 pb-2 overflow-x-auto">
+    <button onclick="showTab('list')" id="tab-list" class="tab-btn px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-700">
+      📝 All Students
+    </button>
+    <button onclick="showTab('ranks')" id="tab-ranks" class="tab-btn px-3.5 py-1.5 text-xs font-semibold rounded-lg text-slate-600 hover:bg-slate-100">
+      🏆 Class Ranks
+    </button>
+    <button onclick="showTab('edit')" id="tab-edit" class="tab-btn px-3.5 py-1.5 text-xs font-semibold rounded-lg text-slate-600 hover:bg-slate-100">
+      ✏️ Update Marks
+    </button>
+    <button onclick="showTab('backlogs')" id="tab-backlogs" class="tab-btn px-3.5 py-1.5 text-xs font-semibold rounded-lg text-slate-600 hover:bg-slate-100">
+      ⚠️ Backlog List
+    </button>
+    <button onclick="showTab('prereq')" id="tab-prereq" class="tab-btn px-3.5 py-1.5 text-xs font-semibold rounded-lg text-slate-600 hover:bg-slate-100">
+      🔒 Subject Rules
+    </button>
+  </div>
+
+  <!-- TAB 1: ALL STUDENTS LIST -->
+  <div id="content-list" class="space-y-4">
+    <!-- Filter & Search Bar -->
+    <div class="clean-card rounded-xl p-3 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-2 flex-1 max-w-sm">
+        <input id="searchInput" type="text" placeholder="Search by name or roll number..."
+               oninput="filterStudents()"
+               class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:bg-white rounded-lg px-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none transition">
+      </div>
+      <div class="flex items-center gap-2">
+        <select id="resultFilter" onchange="filterStudents()" class="bg-slate-50 border border-slate-200 text-xs text-slate-700 rounded-lg px-2.5 py-1.5 focus:outline-none">
+          <option value="ALL">Show All Results</option>
+          <option value="PASS">Passed Only</option>
+          <option value="FAIL">With Backlog Only</option>
+          <option value="75">75% & Above (Distinction)</option>
+          <option value="60">60% & Above (First Class)</option>
+        </select>
+        <button onclick="downloadCSV()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-lg transition border border-slate-200">
+          Export CSV
+        </button>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="clean-card rounded-xl overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200 text-[11px]">
+            <tr>
+              <th class="px-4 py-3">Roll No</th>
+              <th class="px-4 py-3">Name</th>
+              <th class="px-3 py-3 text-center">Data Struct</th>
+              <th class="px-3 py-3 text-center">Digital Logic</th>
+              <th class="px-3 py-3 text-center">Maths</th>
+              <th class="px-3 py-3 text-center">C++ OOP</th>
+              <th class="px-3 py-3 text-center">Comp Org</th>
+              <th class="px-4 py-3 text-right">Total (500)</th>
+              <th class="px-4 py-3 text-right">Percentage</th>
+              <th class="px-4 py-3 text-center">Status</th>
+              <th class="px-4 py-3 text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody id="studentTableBody" class="divide-y divide-slate-100">
+            <!-- Dynamic rows -->
+          </tbody>
+        </table>
+      </div>
+      <div class="p-3 bg-slate-50/50 border-t border-slate-200 text-[11px] text-slate-500 flex items-center justify-between">
+        <span id="rowCountLabel">10 students</span>
+        <span>Pass mark: 40 per subject</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 2: CLASS RANKS -->
+  <div id="content-ranks" class="hidden space-y-4">
+    <div class="clean-card rounded-xl p-5 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div>
+          <h2 class="text-base font-bold text-slate-900">Class Rank List</h2>
+          <p class="text-xs text-slate-500">Sorted from highest percentage to lowest.</p>
+        </div>
+      </div>
+
+      <!-- Top 3 Quick Highlight Cards -->
+      <div id="top3Cards" class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <!-- Rendered by JS -->
+      </div>
+
+      <!-- Ranked List Table -->
+      <div class="overflow-x-auto border border-slate-200 rounded-lg">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-50 text-slate-600 font-semibold text-[11px] border-b border-slate-200">
+            <tr>
+              <th class="px-4 py-2.5">Rank</th>
+              <th class="px-4 py-2.5">Roll No</th>
+              <th class="px-4 py-2.5">Name</th>
+              <th class="px-4 py-2.5 text-right">Total Marks</th>
+              <th class="px-4 py-2.5 text-right">Percentage</th>
+              <th class="px-4 py-2.5 text-center">Result</th>
+              <th class="px-4 py-2.5 text-right">Scorecard</th>
+            </tr>
+          </thead>
+          <tbody id="rankTableBody" class="divide-y divide-slate-100">
+            <!-- Dynamic -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 3: UPDATE / RE-CHECK MARKS -->
+  <div id="content-edit" class="hidden space-y-4">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+      <!-- Edit Form -->
+      <div class="clean-card rounded-xl p-5 space-y-4">
+        <div>
+          <h2 class="text-base font-bold text-slate-900">Update Student Marks</h2>
+          <p class="text-xs text-slate-500">Use this to correct marks or after paper re-checking.</p>
+        </div>
+
+        <div class="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
+          <div>
+            <label class="text-xs font-medium text-slate-700">Select Student:</label>
+            <select id="editStudentSelect" onchange="syncCurrentMarks()" class="w-full mt-1 bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500"></select>
+          </div>
+          <div>
+            <label class="text-xs font-medium text-slate-700">Select Subject:</label>
+            <select id="editSubjectSelect" onchange="syncCurrentMarks()" class="w-full mt-1 bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500">
+              <option value="0">Data Structures</option>
+              <option value="1">Digital Logic</option>
+              <option value="2">Discrete Math</option>
+              <option value="3">OOP in C++</option>
+              <option value="4">Computer Organization</option>
+            </select>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="text-[11px] text-slate-500">Current Marks:</label>
+              <input id="editOldMarks" type="text" readonly class="w-full mt-1 bg-slate-100 border border-slate-200 rounded px-2.5 py-1.5 text-xs font-mono font-semibold text-slate-600">
+            </div>
+            <div>
+              <label class="text-[11px] font-semibold text-indigo-700">New Marks (out of 100):</label>
+              <input id="editNewMarks" type="number" min="0" max="100" class="w-full mt-1 bg-white border border-indigo-400 rounded px-2.5 py-1.5 text-xs font-mono font-bold text-slate-900 focus:outline-none">
+            </div>
+          </div>
+          <button onclick="saveMarksUpdate()" class="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-lg transition mt-2">
+            Save Updated Marks
+          </button>
+        </div>
+      </div>
+
+      <!-- Change History -->
+      <div class="clean-card rounded-xl p-5 space-y-3">
+        <h3 class="text-sm font-bold text-slate-900">Recent Marks Updates</h3>
+        <p class="text-xs text-slate-500">Log of recent edits. Click 'Undo' at top to revert any mistake.</p>
+        <div id="changeLogList" class="space-y-2 max-h-80 overflow-y-auto pr-1">
+          <!-- Dynamic -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 4: BACKLOG LIST -->
+  <div id="content-backlogs" class="hidden space-y-4">
+    <div class="clean-card rounded-xl p-5 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div>
+          <h2 class="text-base font-bold text-slate-900">Backlog & Re-exam List</h2>
+          <p class="text-xs text-slate-500">Students who scored under 40 in one or more subjects.</p>
+        </div>
+        <span id="backlogTag" class="text-xs font-semibold px-2.5 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+          0 Students
+        </span>
+      </div>
+
+      <div class="overflow-x-auto border border-slate-200 rounded-lg">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-50 text-slate-600 font-semibold text-[11px] border-b border-slate-200">
+            <tr>
+              <th class="px-4 py-2.5">Roll No</th>
+              <th class="px-4 py-2.5">Student Name</th>
+              <th class="px-4 py-2.5">Subject(s) with Score &lt; 40</th>
+              <th class="px-4 py-2.5 text-right">Action Needed</th>
+            </tr>
+          </thead>
+          <tbody id="backlogTableBody" class="divide-y divide-slate-100">
+            <!-- Dynamic -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 5: SUBJECT RULES -->
+  <div id="content-prereq" class="hidden space-y-4">
+    <div class="clean-card rounded-xl p-5 space-y-4">
+      <div>
+        <h2 class="text-base font-bold text-slate-900">Next Semester Subject Eligibility Rules</h2>
+        <p class="text-xs text-slate-500">Checks if students passed the required basic subject to take the next one.</p>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-900">Advanced Algorithms</span>
+            <span class="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded">Next Sem</span>
+          </div>
+          <p class="text-[11px] text-slate-500">Requires passing: <strong>Data Structures (≥40)</strong></p>
+          <div id="ruleAlgo" class="text-xs font-medium text-slate-700 pt-1">Checking...</div>
+        </div>
+
+        <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-900">Operating Systems</span>
+            <span class="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded">Next Sem</span>
+          </div>
+          <p class="text-[11px] text-slate-500">Requires passing: <strong>Computer Organization (≥40)</strong></p>
+          <div id="ruleOS" class="text-xs font-medium text-slate-700 pt-1">Checking...</div>
+        </div>
+
+        <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-900">Theory of Computation</span>
+            <span class="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded">Next Sem</span>
+          </div>
+          <p class="text-[11px] text-slate-500">Requires passing: <strong>Discrete Mathematics (≥40)</strong></p>
+          <div id="ruleTOC" class="text-xs font-medium text-slate-700 pt-1">Checking...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD STUDENT -->
+  <div id="addModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200">
+      <div class="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
+        <h3 class="text-sm font-bold text-slate-900">Add New Student</h3>
+        <button onclick="closeAddModal()" class="text-slate-400 hover:text-slate-600">✕</button>
+      </div>
+      <div class="space-y-3">
+        <div>
+          <label class="text-xs font-medium text-slate-700">Roll Number:</label>
+          <input id="addRoll" type="number" class="w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500" placeholder="e.g. 111">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-slate-700">Student Name:</label>
+          <input id="addName" type="text" class="w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500" placeholder="e.g. Aditya Shinde">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-slate-700">Marks out of 100:</label>
+          <div class="grid grid-cols-5 gap-1.5 mt-1">
+            <div>
+              <span class="text-[10px] text-slate-500 block text-center">DS</span>
+              <input id="am0" type="number" value="75" class="w-full bg-slate-50 border border-slate-200 rounded p-1 text-xs text-center font-mono">
+            </div>
+            <div>
+              <span class="text-[10px] text-slate-500 block text-center">DL</span>
+              <input id="am1" type="number" value="80" class="w-full bg-slate-50 border border-slate-200 rounded p-1 text-xs text-center font-mono">
+            </div>
+            <div>
+              <span class="text-[10px] text-slate-500 block text-center">Math</span>
+              <input id="am2" type="number" value="70" class="w-full bg-slate-50 border border-slate-200 rounded p-1 text-xs text-center font-mono">
+            </div>
+            <div>
+              <span class="text-[10px] text-slate-500 block text-center">OOP</span>
+              <input id="am3" type="number" value="78" class="w-full bg-slate-50 border border-slate-200 rounded p-1 text-xs text-center font-mono">
+            </div>
+            <div>
+              <span class="text-[10px] text-slate-500 block text-center">CO</span>
+              <input id="am4" type="number" value="82" class="w-full bg-slate-50 border border-slate-200 rounded p-1 text-xs text-center font-mono">
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center justify-end gap-2 mt-5 pt-3 border-t border-slate-100">
+        <button onclick="closeAddModal()" class="px-3.5 py-1.5 text-xs text-slate-500 hover:text-slate-800">Cancel</button>
+        <button onclick="saveNewStudent()" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs rounded-lg shadow-sm">Save Student</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: STUDENT SCORECARD (PRINTABLE) -->
+  <div id="scorecardModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
+    <div id="printableScorecard" class="bg-white rounded-2xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-slate-200 relative">
+      <div class="flex items-start justify-between border-b border-slate-200 pb-4 mb-4">
+        <div>
+          <h2 class="text-base font-bold text-slate-900 uppercase tracking-tight">Student Scorecard</h2>
+          <p class="text-xs text-slate-500 mt-0.5">Computer Engineering Department</p>
+        </div>
+        <button onclick="closeScorecard()" class="text-slate-400 hover:text-slate-600 text-sm print:hidden">✕</button>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200 mb-4 text-xs">
+        <div>
+          <span class="text-slate-500">Student Name:</span>
+          <strong id="scName" class="text-slate-900 block text-sm mt-0.5">-</strong>
+        </div>
+        <div>
+          <span class="text-slate-500">Roll Number:</span>
+          <strong id="scRoll" class="text-slate-900 font-mono block text-sm mt-0.5">-</strong>
+        </div>
+        <div>
+          <span class="text-slate-500">Result:</span>
+          <strong id="scStatus" class="text-emerald-700 block text-xs mt-0.5">-</strong>
+        </div>
+        <div>
+          <span class="text-slate-500">Percentage:</span>
+          <strong id="scPercent" class="text-indigo-700 block text-xs mt-0.5">-</strong>
+        </div>
+      </div>
+
+      <table class="w-full text-left text-xs mb-4 border border-slate-200 rounded-lg overflow-hidden">
+        <thead class="bg-slate-100 text-slate-700 font-semibold text-[11px] border-b border-slate-200">
+          <tr>
+            <th class="p-2.5">Subject</th>
+            <th class="p-2.5 text-center">Max</th>
+            <th class="p-2.5 text-center">Scored</th>
+            <th class="p-2.5 text-center">Status</th>
+          </tr>
+        </thead>
+        <tbody id="scSubjectsBody" class="divide-y divide-slate-100">
+          <!-- Dynamic -->
+        </tbody>
+      </table>
+
+      <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between text-xs mb-6">
+        <span>Total Marks: <strong id="scTotal" class="text-slate-900 font-mono">0 / 500</strong></span>
+        <span>Division: <strong id="scDivision" class="text-slate-900">-</strong></span>
+      </div>
+
+      <div class="flex items-center justify-between text-xs pt-3 border-t border-slate-100 print:hidden">
+        <span class="text-slate-400 text-[11px]">Click print to save or print.</span>
+        <div class="flex gap-2">
+          <button onclick="window.print()" class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg text-xs shadow-sm">
+            Print Scorecard
+          </button>
+          <button onclick="closeScorecard()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- JAVASCRIPT: Clean Logic & Real Random Names -->
+  <script>
+    const SUBJECTS = [
+      "Data Structures",
+      "Digital Logic",
+      "Discrete Math",
+      "OOP in C++",
+      "Computer Org"
+    ];
+
+    class Student {
+      constructor(rollNo, name, marks) {
+        this.rollNo = parseInt(rollNo);
+        this.name = name;
+        this.marks = marks.map(Number);
+        this.recalculate();
+      }
+      recalculate() {
+        this.total = this.marks.reduce((a, b) => a + b, 0);
+        this.percentage = this.total / 5.0;
+        this.backlogs = this.marks.filter(m => m < 40).length;
+        this.hasFailed = this.backlogs > 0 || this.percentage < 40.0;
+        this.division = this.getDivision();
+      }
+      getDivision() {
+        if (this.hasFailed) return "Backlog";
+        if (this.percentage >= 75) return "Distinction";
+        if (this.percentage >= 60) return "First Class";
+        if (this.percentage >= 50) return "Second Class";
+        return "Pass";
+      }
+    }
+
+    // 10 Random Students (No Samiksha Bakshi)
+    let students = [];
+    let undoStack = [];
+
+    function initData() {
+      students = [
+        new Student(101, "Rahul Patil",      [82.0, 88.0, 76.5, 90.0, 84.0]),
+        new Student(102, "Priya Sharma",     [92.0, 95.0, 90.0, 96.0, 94.0]), // Top scorer
+        new Student(103, "Amit Verma",       [70.0, 68.0, 74.0, 65.0, 72.0]),
+        new Student(104, "Snehal Deshmukh",  [85.0, 89.0, 82.0, 88.0, 86.0]),
+        new Student(105, "Aryan Gupta",      [75.0, 80.0, 78.0, 82.0, 79.0]),
+        new Student(106, "Tanvi Kulkarni",   [58.0, 62.0, 35.0, 60.0, 58.0]), // Backlog in Math (35)
+        new Student(107, "Devendra Joshi",   [88.0, 90.0, 85.0, 92.0, 89.0]),
+        new Student(108, "Riya Shah",        [36.0, 50.0, 45.0, 48.0, 38.0]), // Backlogs in DS (36) and CO (38)
+        new Student(109, "Siddharth Nair",   [89.0, 93.0, 88.0, 94.0, 91.0]), // Replaced name
+        new Student(110, "Aniket Shinde",    [64.0, 68.0, 66.0, 70.0, 65.0])
+      ];
+
+      updateAll();
+    }
+
+    // --- UNDO SYSTEM ---
+    function logAction(type, desc, snapshot) {
+      undoStack.push({ type, desc, snapshot, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+      if (undoStack.length > 20) undoStack.shift();
+      renderChangeLog();
+    }
+
+    function undoLastChange() {
+      if (undoStack.length === 0) {
+        alert("Nothing to undo!");
+        return;
+      }
+      const act = undoStack.pop();
+      if (act.type === "UPDATE_MARKS") {
+        const s = students.find(st => st.rollNo === act.snapshot.rollNo);
+        if (s) {
+          s.marks[act.snapshot.subjectIndex] = act.snapshot.oldMark;
+          s.recalculate();
+        }
+      } else if (act.type === "ADD") {
+        students = students.filter(st => st.rollNo !== act.snapshot.rollNo);
+      } else if (act.type === "DELETE") {
+        students.push(act.snapshot);
+      }
+      updateAll();
+      renderChangeLog();
+    }
+
+    function renderChangeLog() {
+      const container = document.getElementById("changeLogList");
+      if (!container) return;
+      container.innerHTML = "";
+      document.getElementById("undoCountBadge").innerText = undoStack.length;
+
+      if (undoStack.length === 0) {
+        container.innerHTML = `<div class="p-3 text-xs text-slate-400 bg-slate-50 rounded-lg text-center">No recent changes yet.</div>`;
+        return;
+      }
+
+      [...undoStack].reverse().forEach(a => {
+        container.innerHTML += `
+          <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs flex items-start justify-between">
+            <div>
+              <strong class="text-slate-800">${a.desc}</strong>
+              <div class="text-[10px] text-slate-400 mt-0.5">${a.type}</div>
+            </div>
+            <span class="text-[10px] text-slate-400 font-mono">${a.time}</span>
+          </div>
+        `;
+      });
+    }
+
+    // --- RENDER TABLE ---
+    function renderTable(list = students) {
+      const tbody = document.getElementById("studentTableBody");
+      tbody.innerHTML = "";
+      document.getElementById("rowCountLabel").innerText = `${list.length} students shown`;
+
+      if (list.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="11" class="p-6 text-center text-slate-400">No student records match your search.</td></tr>`;
+        return;
+      }
+
+      list.forEach(s => {
+        const tr = document.createElement("tr");
+        tr.className = "hover:bg-slate-50/80 transition";
+
+        const badge = s.hasFailed
+          ? `<span class="px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 font-semibold text-[10px]">${s.backlogs} Backlog</span>`
+          : `<span class="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold text-[10px]">${s.division}</span>`;
+
+        tr.innerHTML = `
+          <td class="px-4 py-3 font-mono font-bold text-slate-700">#${s.rollNo}</td>
+          <td class="px-4 py-3 font-semibold text-slate-900">${s.name}</td>
+          <td class="px-3 py-3 text-center font-mono ${s.marks[0] < 40 ? "text-rose-600 font-bold bg-rose-50/50" : "text-slate-700"}">${s.marks[0].toFixed(0)}</td>
+          <td class="px-3 py-3 text-center font-mono ${s.marks[1] < 40 ? "text-rose-600 font-bold bg-rose-50/50" : "text-slate-700"}">${s.marks[1].toFixed(0)}</td>
+          <td class="px-3 py-3 text-center font-mono ${s.marks[2] < 40 ? "text-rose-600 font-bold bg-rose-50/50" : "text-slate-700"}">${s.marks[2].toFixed(0)}</td>
+          <td class="px-3 py-3 text-center font-mono ${s.marks[3] < 40 ? "text-rose-600 font-bold bg-rose-50/50" : "text-slate-700"}">${s.marks[3].toFixed(0)}</td>
+          <td class="px-3 py-3 text-center font-mono ${s.marks[4] < 40 ? "text-rose-600 font-bold bg-rose-50/50" : "text-slate-700"}">${s.marks[4].toFixed(0)}</td>
+          <td class="px-4 py-3 text-right font-bold text-slate-900">${s.total.toFixed(0)}</td>
+          <td class="px-4 py-3 text-right font-bold ${s.hasFailed ? "text-rose-600" : "text-indigo-600"}">${s.percentage.toFixed(1)}%</td>
+          <td class="px-4 py-3 text-center">${badge}</td>
+          <td class="px-4 py-3 text-right space-x-1">
+            <button onclick="openScorecard(${s.rollNo})" class="px-2.5 py-1 rounded bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-medium text-[11px] transition">
+              Scorecard
+            </button>
+            <button onclick="deleteStudent(${s.rollNo})" class="px-2 py-1 rounded text-rose-600 hover:bg-rose-50 text-[11px] transition">
+              ✕
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // --- RENDER RANKS ---
+    function renderRanks() {
+      const sorted = [...students].sort((a, b) => b.percentage - a.percentage);
+      const top3Container = document.getElementById("top3Cards");
+      top3Container.innerHTML = "";
+
+      const rankPills = ["1st Rank (Top)", "2nd Rank", "3rd Rank"];
+      for (let i = 0; i < Math.min(3, sorted.length); i++) {
+        const s = sorted[i];
+        top3Container.innerHTML += `
+          <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-xl">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-indigo-600">${rankPills[i]}</span>
+              <span class="text-xs font-mono text-slate-500">#${s.rollNo}</span>
+            </div>
+            <h4 class="text-sm font-bold text-slate-900 mt-1">${s.name}</h4>
+            <div class="mt-2 pt-2 border-t border-slate-200/80 flex justify-between items-baseline">
+              <span class="text-xs text-slate-500">${s.total.toFixed(0)} / 500</span>
+              <span class="text-sm font-extrabold text-emerald-600">${s.percentage.toFixed(1)}%</span>
+            </div>
+          </div>
+        `;
+      }
+
+      const tbody = document.getElementById("rankTableBody");
+      tbody.innerHTML = "";
+      sorted.forEach((s, idx) => {
+        tbody.innerHTML += `
+          <tr class="hover:bg-slate-50">
+            <td class="px-4 py-2 font-mono font-bold text-slate-700">#${idx + 1}</td>
+            <td class="px-4 py-2 font-mono text-slate-500">#${s.rollNo}</td>
+            <td class="px-4 py-2 font-semibold text-slate-900">${s.name}</td>
+            <td class="px-4 py-2 text-right">${s.total.toFixed(0)}</td>
+            <td class="px-4 py-2 text-right font-bold text-indigo-600">${s.percentage.toFixed(1)}%</td>
+            <td class="px-4 py-2 text-center text-xs text-slate-600">${s.division}</td>
+            <td class="px-4 py-2 text-right">
+              <button onclick="openScorecard(${s.rollNo})" class="text-indigo-600 hover:underline font-medium text-xs">
+                View
+              </button>
+            </td>
+          </tr>
+        `;
+      });
+    }
+
+    // --- RENDER BACKLOGS ---
+    function renderBacklogs() {
+      const backlogs = students.filter(s => s.hasFailed);
+      document.getElementById("backlogTag").innerText = `${backlogs.length} Students`;
+      const tbody = document.getElementById("backlogTableBody");
+      tbody.innerHTML = "";
+
+      if (backlogs.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-emerald-600 font-medium">All students have passed! No backlogs.</td></tr>`;
+        return;
+      }
+
+      backlogs.forEach(s => {
+        const failedSubs = [];
+        s.marks.forEach((m, idx) => {
+          if (m < 40) failedSubs.push(`${SUBJECTS[idx]} (${m.toFixed(0)})`);
+        });
+
+        tbody.innerHTML += `
+          <tr class="hover:bg-slate-50">
+            <td class="px-4 py-2.5 font-mono font-bold text-rose-600">#${s.rollNo}</td>
+            <td class="px-4 py-2.5 font-semibold text-slate-900">${s.name}</td>
+            <td class="px-4 py-2.5 text-rose-700 font-medium">${failedSubs.join(", ") || "Total under 40%"}</td>
+            <td class="px-4 py-2.5 text-right">
+              <span class="text-xs px-2 py-0.5 rounded bg-rose-50 text-rose-600 font-semibold border border-rose-200">Re-exam</span>
+            </td>
+          </tr>
+        `;
+      });
+    }
+
+    // --- RENDER PREREQUISITES ---
+    function renderPrereqs() {
+      const failedDS = students.filter(s => s.marks[0] < 40);
+      document.getElementById("ruleAlgo").innerHTML = failedDS.length === 0
+        ? `<span class="text-emerald-600">✓ All students cleared</span>`
+        : `<span class="text-rose-600">✕ Blocked: ${failedDS.map(s => s.name).join(", ")}</span>`;
+
+      const failedCO = students.filter(s => s.marks[4] < 40);
+      document.getElementById("ruleOS").innerHTML = failedCO.length === 0
+        ? `<span class="text-emerald-600">✓ All students cleared</span>`
+        : `<span class="text-rose-600">✕ Blocked: ${failedCO.map(s => s.name).join(", ")}</span>`;
+
+      const failedDM = students.filter(s => s.marks[2] < 40);
+      document.getElementById("ruleTOC").innerHTML = failedDM.length === 0
+        ? `<span class="text-emerald-600">✓ All students cleared</span>`
+        : `<span class="text-rose-600">✕ Blocked: ${failedDM.map(s => s.name).join(", ")}</span>`;
+    }
+
+    // --- EDIT MARKS ACTIONS ---
+    function populateEditSelect() {
+      const sel = document.getElementById("editStudentSelect");
+      if (!sel) return;
+      sel.innerHTML = "";
+      students.forEach(s => {
+        sel.innerHTML += `<option value="${s.rollNo}">#${s.rollNo} - ${s.name}</option>`;
+      });
+      syncCurrentMarks();
+    }
+
+    function syncCurrentMarks() {
+      const roll = parseInt(document.getElementById("editStudentSelect").value);
+      const subIdx = parseInt(document.getElementById("editSubjectSelect").value);
+      const s = students.find(st => st.rollNo === roll);
+      if (!s) return;
+      const mark = s.marks[subIdx];
+      document.getElementById("editOldMarks").value = mark.toFixed(0);
+      document.getElementById("editNewMarks").value = mark.toFixed(0);
+    }
+
+    function saveMarksUpdate() {
+      const roll = parseInt(document.getElementById("editStudentSelect").value);
+      const subIdx = parseInt(document.getElementById("editSubjectSelect").value);
+      const newMark = parseFloat(document.getElementById("editNewMarks").value);
+
+      if (isNaN(newMark) || newMark < 0 || newMark > 100) {
+        alert("Please enter marks between 0 and 100.");
+        return;
+      }
+
+      const s = students.find(st => st.rollNo === roll);
+      if (!s) return;
+
+      const oldMark = s.marks[subIdx];
+      s.marks[subIdx] = newMark;
+      s.recalculate();
+
+      logAction("UPDATE_MARKS", `Updated ${SUBJECTS[subIdx]} for ${s.name} (${oldMark} ➔ ${newMark})`, {
+        rollNo: s.rollNo,
+        subjectIndex: subIdx,
+        oldMark: oldMark,
+        newMark: newMark
+      });
+
+      alert(`Saved marks for ${s.name} in ${SUBJECTS[subIdx]}: ${oldMark} ➔ ${newMark}`);
+      updateAll();
+    }
+
+    // --- ADD / DELETE STUDENT ---
+    function openAddModal() { document.getElementById("addModal").classList.remove("hidden"); }
+    function closeAddModal() { document.getElementById("addModal").classList.add("hidden"); }
+
+    function saveNewStudent() {
+      const roll = parseInt(document.getElementById("addRoll").value);
+      const name = document.getElementById("addName").value.trim();
+      if (!roll || !name) { alert("Enter valid Roll Number and Name."); return; }
+      if (students.some(s => s.rollNo === roll)) { alert("Roll number already exists!"); return; }
+
+      const marks = [
+        parseFloat(document.getElementById("am0").value) || 0,
+        parseFloat(document.getElementById("am1").value) || 0,
+        parseFloat(document.getElementById("am2").value) || 0,
+        parseFloat(document.getElementById("am3").value) || 0,
+        parseFloat(document.getElementById("am4").value) || 0
+      ];
+
+      const s = new Student(roll, name, marks);
+      students.push(s);
+      logAction("ADD", `Added new student: ${s.name} (#${s.rollNo})`, s);
+      closeAddModal();
+      updateAll();
+    }
+
+    function deleteStudent(rollNo) {
+      if (!confirm(`Delete student #${rollNo}?`)) return;
+      const idx = students.findIndex(s => s.rollNo === rollNo);
+      if (idx !== -1) {
+        const removed = students.splice(idx, 1)[0];
+        logAction("DELETE", `Deleted student: ${removed.name} (#${removed.rollNo})`, removed);
+        updateAll();
+      }
+    }
+
+    // --- SCORECARD MODAL ---
+    function openScorecard(rollNo) {
+      const s = students.find(st => st.rollNo === rollNo);
+      if (!s) return;
+
+      document.getElementById("scName").innerText = s.name;
+      document.getElementById("scRoll").innerText = `#${s.rollNo}`;
+      document.getElementById("scStatus").innerText = s.hasFailed ? "FAIL (Needs Re-exam)" : "PASSED";
+      document.getElementById("scStatus").className = s.hasFailed ? "text-rose-600 block text-xs mt-0.5 font-bold" : "text-emerald-700 block text-xs mt-0.5 font-bold";
+      document.getElementById("scPercent").innerText = `${s.percentage.toFixed(1)}%`;
+      document.getElementById("scTotal").innerText = `${s.total.toFixed(0)} / 500`;
+      document.getElementById("scDivision").innerText = s.division;
+
+      const tbody = document.getElementById("scSubjectsBody");
+      tbody.innerHTML = "";
+      s.marks.forEach((m, idx) => {
+        const pass = m >= 40;
+        tbody.innerHTML += `
+          <tr>
+            <td class="p-2.5 font-medium text-slate-800">${SUBJECTS[idx]}</td>
+            <td class="p-2.5 text-center text-slate-400">100</td>
+            <td class="p-2.5 text-center font-bold ${pass ? "text-slate-900" : "text-rose-600"}">${m.toFixed(0)}</td>
+            <td class="p-2.5 text-center font-semibold text-[10px] ${pass ? "text-emerald-600" : "text-rose-600"}">${pass ? "Pass" : "Fail"}</td>
+          </tr>
+        `;
+      });
+
+      document.getElementById("scorecardModal").classList.remove("hidden");
+    }
+
+    function closeScorecard() {
+      document.getElementById("scorecardModal").classList.add("hidden");
+    }
+
+    // --- FILTER & SEARCH ---
+    function filterStudents() {
+      const q = document.getElementById("searchInput").value.trim().toLowerCase();
+      const filter = document.getElementById("resultFilter").value;
+
+      let list = students.filter(s => s.name.toLowerCase().includes(q) || s.rollNo.toString().includes(q));
+
+      if (filter === "PASS") list = list.filter(s => !s.hasFailed);
+      else if (filter === "FAIL") list = list.filter(s => s.hasFailed);
+      else if (filter === "75") list = list.filter(s => s.percentage >= 75);
+      else if (filter === "60") list = list.filter(s => s.percentage >= 60);
+
+      renderTable(list);
+    }
+
+    // --- TABS ---
+    function showTab(name) {
+      document.querySelectorAll("[id^='content-']").forEach(el => el.classList.add("hidden"));
+      document.querySelectorAll(".tab-btn").forEach(btn => {
+        btn.className = "tab-btn px-3.5 py-1.5 text-xs font-semibold rounded-lg text-slate-600 hover:bg-slate-100";
+      });
+
+      document.getElementById(`content-${name}`).classList.remove("hidden");
+      document.getElementById(`tab-${name}`).className = "tab-btn px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-700";
+
+      if (name === "ranks") renderRanks();
+      if (name === "edit") syncCurrentMarks();
+    }
+
+    // --- METRICS & UPDATE ---
+    function updateMetrics() {
+      document.getElementById("statTotal").innerText = students.length;
+      if (students.length > 0) {
+        const avg = students.reduce((acc, s) => acc + s.percentage, 0) / students.length;
+        document.getElementById("statAvg").innerText = `${avg.toFixed(1)}%`;
+        const top = [...students].sort((a, b) => b.percentage - a.percentage)[0];
+        document.getElementById("statTopPercent").innerText = `${top.percentage.toFixed(1)}%`;
+        document.getElementById("statTopName").innerText = top.name;
+      }
+      const backlogs = students.filter(s => s.hasFailed).length;
+      document.getElementById("statBacklogCount").innerText = backlogs;
+    }
+
+    function updateAll() {
+      renderTable();
+      renderRanks();
+      renderBacklogs();
+      renderPrereqs();
+      populateEditSelect();
+      updateMetrics();
+    }
+
+    function downloadCSV() {
+      let csv = "Roll No,Name,Data Structures,Digital Logic,Math,C++ OOP,Comp Org,Total,Percentage,Status\n";
+      students.forEach(s => {
+        csv += `${s.rollNo},"${s.name}",${s.marks.join(",")},${s.total.toFixed(0)},${s.percentage.toFixed(1)},"${s.division}"\n`;
+      });
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.setAttribute('href', url);
+      a.setAttribute('download', 'Student_Marks.csv');
+      a.click();
+    }
+
+    window.onload = initData;
+  </script>
+</body>
+</html>
